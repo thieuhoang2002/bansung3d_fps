@@ -1,5 +1,4 @@
 Cần fix: 
-- Bỏ MongoDb
 - Fix chơi lại game khi ván kết thúc
 
 # Cách chạy game (Tạm thời)
