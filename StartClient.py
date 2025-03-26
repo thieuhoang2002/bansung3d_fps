@@ -6,11 +6,17 @@ from data.Map import Map
 from networks.database import getIpServer
 
 
+# def create_client(username):
+#     global my_client
+#     #my_client = MyClient(username,str(getIpServer()),6000, Vec3(0,1.4,0))
+#     my_client = MyClient(username,str('192.168.174.1'),6000, Vec3(0,1.4,0))
+    
 def create_client(username):
     global my_client
-    my_client = MyClient(username,str(getIpServer()),6000, Vec3(0,1.4,0))
-    # my_client = MyClient(username,str('192.168.185.76'),6000, Vec3(0,1.4,0))
-    
+    ip_server = getIpServer()  # Lấy địa chỉ IP từ hàm getIpServer
+    print(f"Địa chỉ IP server: {ip_server}")
+    print("type of ip_server: ", type(ip_server))
+    my_client = MyClient(username, str(ip_server), 6000, Vec3(0, 1.4, 0))
 
 
 app = Ursina()

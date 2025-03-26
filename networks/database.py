@@ -13,5 +13,5 @@ def setIpServer(ipServer):
     # Nếu cần lưu trữ địa chỉ IP vào file hoặc nơi khác, bạn có thể thêm logic tại đây
 
 # Ví dụ sử dụng
-# setIpServer('192.168.0.1')  # Không cần thiết nếu không lưu trữ
+#setIpServer('192.168.174.1')  # Không cần thiết nếu không lưu trữ
 getIpServer()

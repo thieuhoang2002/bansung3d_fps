@@ -18,12 +18,40 @@ class MyServer:
         self.notifycation_content = None
         self.audioPort = 3000
         self.numberOfPlayers = 0
+        self.waiting_list = []  # Danh sách chờ đăng ký ID mới
+        self.is_resetting = False  # Cờ để ngăn chặn xử lý nhiều lần
 
     def handle(self):
         if self.start_server:
             self.server = UrsinaNetworkingServer(self.ip, self.port)
             self.easy = easyursinanetworking.EasyUrsinaNetworkingServer(self.server)
             print("Server đã khởi tạo và đăng ký các event.")
+
+            @self.server.event
+            def registerPlayer(Client, content):
+                if Client.id not in self.waiting_list:
+                    self.waiting_list.append(Client.id)
+
+                new_id = self.waiting_list.index(Client.id)
+                
+                start_position = playerRandomPositions[new_id]
+                self.easy.create_replicated_variable(new_id, {
+                    "id": new_id,
+                    'position': start_position,
+                    'rotation': (0,0,0),
+                    'status': 'stand',
+                    'hp': 100,
+                })
+                Client.send_message('assignNewID', {'id': new_id, 'position': start_position})
+
+            @self.server.event
+            def endGame(Client, content):
+                print(f"Trò chơi kết thúc, người thắng là: {content['id']}")
+
+                # Xóa toàn bộ danh sách người chơi
+                self.easy.replicated_variables.clear()
+                self.server.broadcast('reset_game', {})  # Thông báo client reset game
+                self.waiting_list = []  # Reset danh sách đăng ký
 
             @self.server.event
             def onClientConnected(Client):
@@ -101,6 +129,7 @@ class MyServer:
             @self.server.event
             def player_shot(Client, content):
                 try:
+                    print(f"Danh sách người chơi trên server: {self.easy.replicated_variables}")
                     target_id = content.get('id')
                     # Lấy dữ liệu người chơi từ replicated variables
                     if target_id in self.easy.replicated_variables:
@@ -134,7 +163,7 @@ class MyServer:
                     print(f"Server: Đã xác định người thắng là {winner}")
                     self.server.broadcast('endGame', {'id': winner})
 
-            
+
             @self.server.event
             def openOtherVoiceChat(Client, content):
                 print(content)
@@ -147,17 +176,20 @@ class MyServer:
 
             @self.server.event
             def resetGameRequest(Client, content):
+                if self.is_resetting:
+                    print(f"Server: Đang reset, bỏ qua yêu cầu từ {Client.id}")
+                    return  
+
+                self.is_resetting = True  
                 print("Server: Nhận yêu cầu reset game từ Client:", Client.id)
 
-                # Xóa toàn bộ replicated variables cũ
-                for key in list(self.easy.replicated_variables.keys()):
-                    self.easy.remove_replicated_variable_by_name(key)
+                self.easy.replicated_variables.clear()
+                self.waiting_list = []  
 
-                # Tạo lại danh sách người chơi với vị trí mới
                 new_players_data = {}
                 for client in self.server.clients:
                     client_id = client.id  
-                    start_position = playerRandomPositions[int(client_id)]  # Lấy vị trí mới
+                    start_position = playerRandomPositions[int(client_id)]  
                     self.easy.create_replicated_variable(client_id, {
                         "id": client_id,
                         'position': start_position,
@@ -170,10 +202,21 @@ class MyServer:
                         'hp': 100
                     }
 
-                # Gửi dữ liệu mới về tất cả client
                 print("Server: Broadcast reset_game với dữ liệu mới:", new_players_data)
                 self.server.broadcast('reset_game', new_players_data)
 
+                # ✅ Gửi lại danh sách toàn bộ người chơi ngay sau khi reset
+                self.server.broadcast('allPlayersData', new_players_data)
+
+                from threading import Timer
+                Timer(1.0, lambda: setattr(self, 'is_resetting', False)).start()
+
+            @self.server.event
+            def requestSyncPositions(Client, content):
+                print(f"Server: Nhận yêu cầu đồng bộ vị trí từ {Client.id}")
+
+                sync_data = {pid: data.content['position'] for pid, data in self.easy.replicated_variables.items()}
+                Client.send_message('syncPositions', sync_data)
 
             self.start_server = False
             self.update_server = True

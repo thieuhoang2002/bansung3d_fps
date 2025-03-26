@@ -71,19 +71,51 @@ class MyClient:
             # Debug: Kiểm tra danh sách đã cập nhật
             print("Danh sách người chơi sau khi cập nhật:", self.list_other_players)
 
+        #hàm này chạy được nhưng lỗi nhân bản sau khi reset
         @self.client.event
         def allPlayersData(content):
-            print("🔵 Dữ liệu tất cả người chơi từ server:", content)
+            print("🔵 Cập nhật lại danh sách người chơi từ server:", content)
 
-            for player_id, player_data in content.items():
-                if int(player_id) != self.player_info['id']:
-                    if player_id in self.list_other_players:
-                        print(f"⚠️ Người chơi {player_id} đã tồn tại!")
-                        continue
+            existing_players = set(self.list_other_players.keys())
+            print("Danh sách người chơi hiện tại:", self.list_other_players)
 
+            for player_id_str, player_data in content.items():
+                player_id = int(player_id_str)  # Luôn ép kiểu về int
+
+                if player_id == self.player_info['id']:
+                    print(f"🚫 Bỏ qua chính mình (ID: {player_id})")
+                    continue  # Bỏ qua chính mình
+
+                if player_id in existing_players:
+                    print(f"🔄 Cập nhật lại vị trí người chơi {player_id}: {player_data['position']}")
+                    self.list_other_players[player_id].setPos(player_data['position'])
+                else:
+                    print(f"✅ Thêm người chơi mới {player_id} tại vị trí {player_data['position']}")
                     new_player = OtherPlayer(player_id, player_data['position'])
-                    self.list_other_players[player_id] = new_player  # ✅ Lưu vào dict
-                    print(f"✅ Đã tạo người chơi mới: {player_id} tại vị trí {player_data['position']}")
+                    self.list_other_players[player_id] = new_player  
+
+            # ✅ Yêu cầu đồng bộ lại vị trí
+            self.client.send_message('requestSyncPositions', {})
+
+        #hàm này kết hợp với "hàm này chạy được nhưng lỗi nhân bản sau khi reset"
+        @self.client.event
+        def syncPositions(content):
+            print("🔄 Đồng bộ vị trí của tất cả người chơi từ server:", content)
+
+            for player_id_str, position in content.items():
+                player_id = int(player_id_str)  # Ép kiểu player_id về int
+
+                if player_id == self.player_info['id']:
+                    print(f"✅ Cập nhật vị trí của chính mình (ID: {player_id}) thành {position}")
+                    self.player.position = position  # Cập nhật trực tiếp vị trí của nhân vật chính
+                    continue  
+
+                if player_id in self.list_other_players:
+                    self.list_other_players[player_id].setPos(position)
+                    print(f"✅ Cập nhật vị trí của {player_id} thành {position}")
+                else:
+                    print(f"⚠️ Không tìm thấy người chơi {player_id} trong danh sách, nhưng không tạo mới vì đó có thể là lỗi!")
+
 
         @self.client.event
         def newPlayerLogin(data):
@@ -254,10 +286,22 @@ class MyClient:
                 print(f"🔄 Cập nhật trạng thái của người chơi {player_id}: {status}")
 
         @self.client.event
+        def assignNewID(content):
+            self.player_info['id'] = content['id']
+            self.player.position = content['position']
+            print(f"Đã nhận ID mới: {self.player_info['id']}, vị trí: {self.player.position}")
+
+
+
+        @self.client.event
         def reset_game(content):
             print("Đã nhận event reset_game từ server:", content)
-            # Gọi hàm resetGame cục bộ để cập nhật trạng thái mới
             self.resetGame(content)
+
+            # ✅ Yêu cầu danh sách tất cả người chơi từ server để cập nhật lại
+            self.client.send_message('requestAllPlayersData', {})
+
+
 
     def resetGame(self, content):
         print("Dữ liệu content nhận được:", content)
@@ -268,6 +312,7 @@ class MyClient:
             print("ℹ️ Nhận dữ liệu endGame thay vì reset_game, bỏ qua:", content)
             return
 
+        print(f"list other players resettttttt: {self.list_other_players}")
         # Xóa tất cả OtherPlayer cũ
         for player in self.list_other_players.values():
             if hasattr(player, 'character'):
@@ -281,15 +326,6 @@ class MyClient:
             self.player.position = player_pos  # Cập nhật vị trí mới
             self.player.healthbar.value = 100  # Reset máu
             print(f"Đã reset Player {self.player_info['id']} tại vị trí: {self.player.position}")
-
-        # **Tạo lại OtherPlayers**
-        for player_id, player_data in content.items():
-            if player_id != str(self.player_info['id']):
-                new_player = OtherPlayer(player_id, player_data['position'])
-                self.list_other_players[player_id] = new_player
-                print(f"✅ Đã tạo người chơi mới: {player_id} tại vị trí {player_data['position']}")
-
-
 
     def updateUsername(self,name):
         self.player_info['username'] = name
@@ -372,16 +408,21 @@ class MyClient:
             self.stopStreamThread.start()
             # self.startStreamThread.join()
             # self.stopStreamThread.join()
-        if key == 'v':
-            if self.allowRestartGame:
-                print("Client: Gửi yêu cầu resetGameRequest đến server")
-                self.client.send_message('resetGameRequest', {'some_data': 'reset'})
-                if self.endGameMessage:
-                    destroy(self.endGameMessage)
-                    self.endGameMessage = None
-                self.player.ndk_revival()  # Gọi ndk_revival để xóa thông báo
-                self.resetGame(self.result)
-                self.allowRestartGame = False
+        if key == 'v' and self.allowRestartGame:
+            print("Client: Gửi yêu cầu resetGameRequest đến server")
+            self.allowRestartGame = False  # Ngăn spam yêu cầu
+
+            if self.player_info['id'] == 0:  # Chỉ Player 0 gửi yêu cầu reset
+                self.client.send_message('resetGameRequest', {})
+
+            self.client.send_message('registerPlayer', {})  # Yêu cầu cấp ID mới
+
+            if self.endGameMessage:
+                destroy(self.endGameMessage)
+                self.endGameMessage = None
+
+            self.player.ndk_revival()
+
             
     def openVoiceChat(self):
         if not self.isStreaming:
