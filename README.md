@@ -1,5 +1,5 @@
 Cần fix: 
-- Fix chơi lại game khi ván kết thúc
+- Có thể reset chơi lại được rồi nhưng vẫn còn bug ở lúc nhấn "v"
 
 # Cách chạy game (Tạm thời)
 
