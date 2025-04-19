@@ -8,7 +8,7 @@ class OtherPlayer(Entity):
         self.pos = position
         self.id = id
         
-        # Nhân vật chính
+        # Nhân vật
         self.character = Character(position)
         self.character.stand_entity.visible = True
         
