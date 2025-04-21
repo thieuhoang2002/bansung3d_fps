@@ -5,29 +5,47 @@ from networks.client import MyClient
 from data.Map import Map
 from networks.database import getIpServer
 
-def start_game(username):
-    app = Ursina()
 
-    my_client = MyClient(username, str(getIpServer()), 6000, Vec3(0, 1.4, 0))
-    Sky()
-    my_map = Map()
+# def create_client(username):
+#     global my_client
+#     #my_client = MyClient(username,str(getIpServer()),6000, Vec3(0,1.4,0))
+#     my_client = MyClient(username,str('192.168.174.1'),6000, Vec3(0,1.4,0))
 
-    def input(key):
-        if key == Keys.escape:
-            app.user_exit()
-        if my_client:
-            my_client.input(key)
+def create_client(username):
+    global my_client
+    ip_server = getIpServer()  # Lấy địa chỉ IP từ hàm getIpServer
+    print(f"Địa chỉ IP server: {ip_server}")
+    print("type of ip_server: ", type(ip_server))
+    my_client = MyClient(username, str(ip_server), 6000, Vec3(0, 1.4, 0))
 
-    def update():
-        if my_client:
-            my_client.client.process_net_events()
-            my_client.easy.process_net_events()
+
+app = Ursina()
+my_client = None
+Sky()
+my_map = Map()
+LoginForm([create_client])
+
+
+def input(key):
+    if key == Keys.escape:
+        exit(0)
+
+
+def update():
+    global my_client
+    if my_client:
+        my_client.client.process_net_events()
+        my_client.easy.process_net_events()
+        if len(my_client.other_bullet) > 0:
             for bullet in my_client.other_bullet:
                 bullet.update()
-            my_client.chatMessage.scrollcustom()
+        my_client.chatMessage.scrollcustom()
 
-    app.run()
 
-if __name__ == "__main__":
-    # Chỉ khởi tạo login form, chưa có game
-    LoginForm([start_game])
+def input(key):
+    global my_client
+    if my_client:
+        my_client.input(key)
+
+
+app.run()
